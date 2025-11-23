@@ -92,12 +92,12 @@ Customer Feedback:
         
         # Call Claude API
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-3-sonnet-20240229",
             max_tokens=2048,
             messages=[
                 {"role": "user", "content": prompt}
             ]
-        )
+)
         
         # Extract response
         response_text = message.content[0].text
