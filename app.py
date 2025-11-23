@@ -1,17 +1,18 @@
 from flask import Flask, request, jsonify
-from anthropic import Anthropic
+from openai import OpenAI
 from datetime import datetime
 from dotenv import load_dotenv
-import pandas as pd  # for dataframe manipulations
-import numpy as np  # for numerical operations
+import pandas as pd
+import numpy as np
+import os
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
-# Initialize Claude client
-client = Anthropic()
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def data_prep(data):
     """
@@ -53,16 +54,16 @@ def data_prep(data):
         raise
 
 
-def ClaudeAPI(data):
+def analyze_with_openai(data):
     """
-    Call Claude API to analyze feedback
+    Call OpenAI API to analyze feedback
     - Summarize key themes
     - Identify top positive and negative points
     - Suggest 1 improvement idea
     - Classify sentiment for each feedback
     """
     try:
-        # Format feedback for Claude
+        # Format feedback for OpenAI
         formatted_feedback = "\n".join([
             f"- {item.get('name', 'Anonymous')}: {item.get('feedback', '')}"
             for item in data
@@ -88,11 +89,11 @@ Format your response as JSON with these exact keys:
 Customer Feedback:
 {formatted_feedback}"""
         
-        print("Calling Claude API...")
+        print("Calling OpenAI API...")
         
-        # Call Claude API
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+        # Call OpenAI API
+        message = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
             max_tokens=2048,
             messages=[
                 {"role": "user", "content": prompt}
@@ -100,15 +101,15 @@ Customer Feedback:
         )
         
         # Extract response
-        response_text = message.content[0].text
-        print(f"Claude response: {response_text[:200]}...")
+        response_text = message.choices[0].message.content
+        print(f"OpenAI response: {response_text[:200]}...")
         
         # Try to parse as JSON
         try:
             import json
             analysis = json.loads(response_text)
         except json.JSONDecodeError:
-            # If Claude didn't return pure JSON, wrap the response
+            # If OpenAI didn't return pure JSON, wrap the response
             analysis = {
                 "summary": response_text,
                 "raw_response": response_text
@@ -118,13 +119,13 @@ Customer Feedback:
         result = {
             "length": len(data),
             "response_date": datetime.now().isoformat(),
-            "Claude_response": analysis
+            "analysis": analysis
         }
         
         return result
     
     except Exception as e:
-        print(f"Error in ClaudeAPI: {str(e)}")
+        print(f"Error in analyze_with_openai: {str(e)}")
         raise
 
 
@@ -147,13 +148,13 @@ def analyze_feedback():
         # Prepare/clean data
         cleaned_data = data_prep(feedback_list)
         
-        # Call Claude for analysis
-        claude_response = ClaudeAPI(cleaned_data)
+        # Call OpenAI for analysis
+        openai_response = analyze_with_openai(cleaned_data)
         
         return jsonify({
             "status": "success",
             "feedback_count": len(cleaned_data),
-            "data": claude_response
+            "data": openai_response
         }), 200
     
     except Exception as e:
@@ -180,20 +181,9 @@ def home():
         "endpoints": {
             "/analyze-feedback": "POST - Send feedback for analysis",
             "/health": "GET - Health check"
-        },
-        "usage": {
-            "method": "POST",
-            "url": "/analyze-feedback",
-            "body": {
-                "feedback": [
-                    {"name": "Alice", "feedback": "Sample feedback"},
-                    {"name": "Bob", "feedback": "Another feedback"}
-                ]
-            }
         }
     }), 200
 
 
 if __name__ == '__main__':
-    # Run in development mode
     app.run(debug=True, host='localhost', port=5000)
