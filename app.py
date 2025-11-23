@@ -92,8 +92,8 @@ Customer Feedback:
         
         # Call Claude API
         message = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=2048,
+             model="claude-sonnet-4-5",
+            max_tokens=1000,
             messages=[
                 {"role": "user", "content": prompt}
             ]
