@@ -4,6 +4,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 import pandas as pd  # for dataframe manipulations
 import numpy as np  # for numerical operations
+import json  # Add at top
+import os   # Add at top
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +53,55 @@ def data_prep(data):
     except Exception as e:
         print(f"Error in data_prep: {str(e)}")
         raise
+    
 
+@app.route('/claude-summary', methods=['POST'])
+def Claude_Summary():
+    data = request.json
+    try:
+        prompt = f"""Youre a data analyser for a big company,
+        it is important for us to summorize thier input from feedback in 5-10 words,
+        respond ONLY in JSON, Here is the prompt:
+
+        {data}
+
+    Return ONLY this JSON structure (no other text):
+    {{
+    "name": "Their name",
+    "feedback": "A summary of their feedback in 5-10 words",
+    }}
+    """
+        print("Calling Claude API...")
+        
+        # Call Claude API
+        message = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1000,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+)
+        
+        # Extract response
+        response_text = message.content[0].text
+        print(f"Claude response: {response_text[:200]}...")
+        
+        # Try to parse as JSON
+        try:
+            analysis = json.loads(response_text)
+        except json.JSONDecodeError:
+            # If Claude didn't return pure JSON, wrap the response
+            analysis = {
+                "summary": response_text,
+                "raw_response": response_text
+            }
+        
+        return jsonify(analysis), 200
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({"status": "error", "error": str(e)}), 500  # ✅ Returns error to n8n
+    
 
 def ClaudeAPI(data):
     """
@@ -69,24 +119,23 @@ def ClaudeAPI(data):
         ])
         
         # Create detailed prompt
-        prompt = f"""Analyze the following customer feedback and provide:
+        prompt = f"""	You're a Customer Insights AI. Analyze this feedback and output in JSON format with keys: "sentiment" (positive/negative/neutral) added to each feedback.
 
-1. A brief summary of key themes (2-3 sentences)
-2. Top 3 positive points (if any exist)
-3. Top 3 negative points (if any exist)
-4. One specific, actionable improvement suggestion
-5. Sentiment classification for each piece of feedback (Positive/Negative/Neutral)
+{formatted_feedback}
 
-Format your response as JSON with these exact keys:
-- summary: brief overall summary
-- positive_points: list of top positive points
-- negative_points: list of top negative points
-- improvement_suggestion: one actionable improvement
-- sentiment_breakdown: list with name and sentiment for each feedback (format: "Name: Sentiment")
-- total_feedback_analyzed: number of feedback entries
-
-Customer Feedback:
-{formatted_feedback}"""
+Return ONLY this JSON structure (no other text):
+{{
+  "summary": "brief summary in 2-3 sentences",
+  "summary_of_positive_points": ["point 1", "point 2", "point 3"],
+  "summary_of_negetive_points": ["point 1", "point 2", "point 3"],
+  "improvement_suggestion": "one specific improvement",
+  "sentiment_breakdown": [
+    {{"name": "Alice", "sentiment": "Positive", "reason": "brief reason"}},
+    {{"name": "Bob", "sentiment": "Positive", "reason": "brief reason"}}
+  ]
+  
+}}
+"""
         
         print("Calling Claude API...")
         
